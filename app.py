@@ -10,10 +10,10 @@ def start(arbiter, **kwargs):
 
 async def app(arbiter):
 
-    actors = [ClientActor() for i in range(10)]
+    actors = [ClientActor(i) for i in range(10)]
 
     for actor in actors:
-        await actor.spawn()
+        actor.spawn()
 
     time.sleep(10)
 

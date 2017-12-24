@@ -6,17 +6,18 @@ from pulsar import spawn, Actor
 
 class ClientActor:
 
-    def __init__(self):
+    def __init__(self, name):
         self.actor = None
+        self.name = name
 
-    async def spawn(self):
-        self.actor = await spawn(start=self.__do_work)
+    def spawn(self):
+        self.actor = spawn(start=self.__do_work)
 
     async def terminate(self):
         await self.actor.stop()
 
     def __do_work(self, actor: Actor, **kwargs):
         while True:
-            print('abc')
+            print(self.name, 'abc')
 
             time.sleep(random.randint(1, 5))
