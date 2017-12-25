@@ -1,25 +1,6 @@
-"""Simple actor message passing"""
-from pulsar import arbiter, ensure_future
-from client_actor import ClientActor
-import time
-
-
-def start(arbiter, **kwargs):
-    ensure_future(app(arbiter))
-
-
-async def app(arbiter):
-
-    actors = [ClientActor(i) for i in range(10)]
-
-    for actor in actors:
-        actor.spawn()
-
-    time.sleep(10)
-
-    for actor in actors:
-        await actor.terminate()
-
+from pulsar import arbiter
+from arbiter_control import *
 
 if __name__ == '__main__':
-    arbiter(start=start).start()
+    amf = ArbiterControlFacade()
+    arbiter(start=amf.start, periodic_task=amf.periodic_task, stop=amf.stop).start()
