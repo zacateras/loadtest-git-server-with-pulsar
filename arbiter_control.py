@@ -1,5 +1,6 @@
-from pulsar import arbiter, ensure_future, spawn
+from pulsar import arbiter, ensure_future, spawn, send
 from actor_control import *
+import random
 
 
 class ArbiterState:
@@ -31,6 +32,7 @@ class ArbiterControl:
 
         # stop actors
         if self.state.tickLimit <= 0:
+            await self.__gather()
             self.__stop_actors()
 
     def stop(self):
@@ -44,6 +46,7 @@ class ArbiterControl:
         self.state.tickLimit = 15
 
         await self.__spawn_actors()
+        await self.__scatter()
 
     async def __spawn_actors(self):
         for ai in range(self.state.actorCount):
@@ -55,6 +58,26 @@ class ArbiterControl:
 
             self.state.actor_control_facades.append(acf)
             self.state.actors.append(actor)
+
+    async def __scatter(self):
+        for i in range(self.state.actorCount):
+            request = (random.randint(0, 10), random.randint(0, 10))
+            response = await send(
+                self.state.actors[i],
+                'run',
+                self.state.actor_control_facades[i].task_process,
+                request)
+
+            self.__print(str(response))
+
+    async def __gather(self):
+        for i in range(self.state.actorCount):
+            response = await send(
+                self.state.actors[i],
+                'run',
+                self.state.actor_control_facades[i].task_prepare_report)
+
+            self.__print(str(response))
 
     def __stop_actors(self):
         for actor in self.state.actors:
@@ -70,13 +93,10 @@ class ArbiterControlFacade:
         self.arbiter_state = ArbiterState()
 
     def start(self, arbiter, **kwargs):
-        arbiter_control = ArbiterControl(arbiter, self.arbiter_state)
-        arbiter_control.start()
+        ArbiterControl(arbiter, self.arbiter_state).start()
 
     def periodic_task(self, arbiter):
-        arbiter_control = ArbiterControl(arbiter, self.arbiter_state)
-        ensure_future(arbiter_control.periodic_task())
+        ensure_future(ArbiterControl(arbiter, self.arbiter_state).periodic_task())
 
     def stop(self):
-        arbiter_control = ArbiterControl(None, self.arbiter_state)
-        arbiter_control.stop()
+        ArbiterControl(None, self.arbiter_state).stop()

@@ -2,13 +2,18 @@ from pulsar import Actor, ensure_future
 
 
 class ActorState:
-    pass
+    def __init__(self):
+        self.task = None
 
 
 class ActorControl:
-    def __init__(self, actor: Actor, actor_state: ActorState):
-        self.actor = actor
-        self.actor_state = actor_state
+    def __init__(self, actor: Actor):
+        if actor is not None:
+            if not hasattr(actor, 'state_ref') or actor.state_ref is None:
+                actor.state_ref = ActorState()
+
+            self.actor = actor
+            self.state = actor.state_ref
 
     def start(self):
         pass
@@ -26,6 +31,15 @@ class ActorControl:
     def stop(self):
         pass
 
+    def task_process(self, task):
+        self.state.task = task
+        self.__print('Starting work on task %s.' % str(task))
+
+        return 'ok'
+
+    def task_prepare_report(self):
+        return self.state.task;
+
     def __print_state(self):
         print('[' + ', '.join((
               'aid: %s' % self.actor.aid,
@@ -41,17 +55,20 @@ class ActorControl:
 
 
 class ActorControlFacade:
-    def __init__(self):
-        self.actor_state = ActorState()
-
     def start(self, actor, **kwargs):
-        arbiter_control = ActorControl(actor, self.actor_state)
-        arbiter_control.start()
+        ActorControl(actor).start()
 
     def periodic_task(self, actor):
-        arbiter_control = ActorControl(actor, self.actor_state)
-        arbiter_control.periodic_task()
+        ActorControl(actor).periodic_task()
 
+    '''
+    Stop method seems to not support Actor parameter.
+    '''
     def stop(self):
-        arbiter_control = ActorControl(None, self.actor_state)
-        arbiter_control.stop()
+        ActorControl(None).stop()
+
+    def task_process(self, actor, task):
+        return ActorControl(actor).task_process(task)
+
+    def task_prepare_report(self, actor):
+        return ActorControl(actor).task_prepare_report()
