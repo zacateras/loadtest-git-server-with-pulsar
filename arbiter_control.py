@@ -42,7 +42,7 @@ class ArbiterControl:
     async def __reset_cycle(self):
         self.state.actor_control_facades = []
         self.state.actors = []
-        self.state.actorCount = 5
+        self.state.actorCount = 1
         self.state.tickLimit = 15
 
         await self.__spawn_actors()
