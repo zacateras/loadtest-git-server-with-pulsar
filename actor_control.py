@@ -1,12 +1,25 @@
 import os
 
-from pulsar import Actor, ensure_future
+import asyncio
+import random
+
+from pulsar import Actor
 from GitConnector import GitCreator, init_repo
+from git_client import *
+
+
+def actor_scatter_process(actor, task):
+    return ActorControl(actor).task_receive(task)
+
+
+def actor_gather_process(actor):
+    return ActorControl(actor).task_report()
 
 
 class ActorState:
     def __init__(self):
         self.task = None
+        self.results = []
 
 
 class ActorControl:
@@ -15,26 +28,50 @@ class ActorControl:
             if not hasattr(actor, 'state_ref') or actor.state_ref is None:
                 actor.state_ref = ActorState()
 
-            self.actor = actor
-            self.state = actor.state_ref
+            self._actor = actor
+            self._state = actor.state_ref
 
-    def start(self):
-        pass
+    def task_receive(self, task):
+        self._print('Starting work on task %s.' % str(task))
+        self._actor._loop.create_task(self._task_process(task))
+
+        return 0
+
+    def task_report(self):
+        return self._state.results
+
+    async def _task_process(self, task):
+        self._state.task = task
+
+        repo_path = 'git/client/%s' % task['id']
+        if not os.path.exists(repo_path):
+            os.makedirs(repo_path)
+
+        os.chdir(repo_path)
+        git_client_clone()
+
+        while True:
+            self._print('Committing...')
+
+            rand_int = random.randint(0, 10)
+
+            await asyncio.sleep(rand_int)
+            self._state.results.append(rand_int)
 
     def periodic_task(self):
         # TODO Implement
 
         # change /Users/savchuk/PycharmProjects/load-test-git to your's project location
-        dir_path = "/Users/savchuk/PycharmProjects/load-test-git/REPO_ROOT/git/client/{}".format(self.actor.aid)
+        dir_path = "/Users/savchuk/PycharmProjects/load-test-git/REPO_ROOT/git/client/{}".format(self._actor.aid)
         if not os.path.exists(dir_path):
             os.makedirs(dir_path)
-            dir_file = "file_{}.txt".format(self.actor.aid)
-            with (open(dir_path + '/' + dir_file, 'a')) as fl:
+            dir_file = "file_1.txt"
+            with (open(dir_file, 'a')) as fl:
                 fl.write("string " * 8)
                 fl.close()
 
             init_repo(dir_path)
-            git_conn = GitCreator(self.actor.aid, 'REPO_ROOT/git/client/{}'.format(self.actor.aid), dir_file,
+            git_conn = GitCreator(self._actor.aid, 'REPO_ROOT/git/client/{}'.format(self._actor.aid), dir_file,
                                   'Commit String 2')
             git_conn.create_new_repo_gihub()
             git_conn.repo_add()
@@ -45,51 +82,18 @@ class ActorControl:
         # print(self.actor.actorparams())
         # print(self.actor.info())
 
-        self.__print('REPORTING!')
-        self.__print_state()
+        self._print('REPORTING!')
+        self._print_state()
 
-    def stop(self):
-        pass
-
-    def task_process(self, task):
-        self.state.task = task
-        self.__print('Starting work on task %s.' % str(task))
-
-        return 'ok'
-
-    def task_prepare_report(self):
-        return self.state.task;
-
-    def __print_state(self):
+    def _print_state(self):
         print('[' + ', '.join((
-            'aid: %s' % self.actor.aid,
-            'name: %s' % self.actor.name,
-            'address: %s' % str(self.actor.address),
-            'is_process: %s' % self.actor.is_process(),
-            'is_arbiter: %s' % self.actor.is_arbiter(),
-            'is_monitor: %s' % self.actor.is_monitor(),
-            'is_running: %s' % self.actor.is_running())) + ']')
+            'aid: %s' % self._actor.aid,
+            'name: %s' % self._actor.name,
+            'address: %s' % str(self._actor.address),
+            'is_process: %s' % self._actor.is_process(),
+            'is_arbiter: %s' % self._actor.is_arbiter(),
+            'is_monitor: %s' % self._actor.is_monitor(),
+            'is_running: %s' % self._actor.is_running())) + ']')
 
-    def __print(self, output):
-        print(('[%s] ' % ', '.join((self.actor.aid, self.actor.name))) + output)
-
-
-class ActorControlFacade:
-    def start(self, actor, **kwargs):
-        ActorControl(actor).start()
-
-    def periodic_task(self, actor):
-        ActorControl(actor).periodic_task()
-
-    '''
-    Stop method seems to not support Actor parameter.
-    '''
-
-    def stop(self):
-        ActorControl(None).stop()
-
-    def task_process(self, actor, task):
-        return ActorControl(actor).task_process(task)
-
-    def task_prepare_report(self, actor):
-        return ActorControl(actor).task_prepare_report()
+    def _print(self, output):
+        print(('[%s] ' % ', '.join((self._actor.aid, self._actor.name))) + output)

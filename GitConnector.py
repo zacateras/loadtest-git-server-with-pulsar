@@ -6,7 +6,6 @@ from git import Repo
 def init_repo(repo_dir):
     Repo.init(repo_dir)
 
-
 class GitCreator:
     """
     Creates git object

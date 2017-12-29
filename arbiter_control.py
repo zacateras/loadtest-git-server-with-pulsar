@@ -1,102 +1,100 @@
-from pulsar import arbiter, ensure_future, spawn, send
+from pulsar import spawn, send, arbiter
 from actor_control import *
+from git_server import *
 import random
+import asyncio
 
 
-class ArbiterState:
+class CycleConfig:
+    def __init__(self, timeout, git_server_cpus, actor_count):
+        self.timeout = timeout
+        self.git_server_cpus = git_server_cpus
+        self.actor_count = actor_count
+
+
+class CycleResult:
     def __init__(self):
-        self.actor_control_facades = []
-        self.actors = []
-
-        self.actorCount = -1
-        self.tickLimit = -1
+        pass
 
 
 class ArbiterControl:
-    def __init__(self, arbiter, state: ArbiterState):
-        self.arbiter = arbiter
-        self.state = state
+    def __init__(self):
+        self._git_server = None
+        self._actors = []
 
-    def start(self):
-        self.__print('START.')
+        self._log = []
 
-    async def periodic_task(self):
-        if self.state.tickLimit <= 0:
-            await self.__reset_cycle()
+    def __call__(self, arb, **kwargs):
+        self._print('START')
 
-        self.__print('PERIODIC_TASK.')
+        self._arb = arb
+        self._arb_task = arb._loop.create_task(self._work())
 
-        # decrease tick limit
-        self.state.tickLimit -= 1
-        self.__print('Remained tick limit: %s.' % self.state.tickLimit)
+    async def _work(self):
+        cycle_i = 0
+        cycle_config = self._next_cycle_config()
 
-        # stop actors
-        if self.state.tickLimit <= 0:
-            await self.__gather()
-            self.__stop_actors()
+        while True:
+            # CYCLE - START
+            self._print('Starting cycle %s...' % cycle_i)
+            self._print('Starting git server...')
+            self._git_server = git_server_build(cycle_config.git_server_cpus)
 
-    def stop(self):
-        self.__print('STOP.')
-        self.__stop_actors()
+            self._print('Spawning actors...')
+            self._actors = []
 
-    async def __reset_cycle(self):
-        self.state.actor_control_facades = []
-        self.state.actors = []
-        self.state.actorCount = 1
-        self.state.tickLimit = 15
+            for ai in range(cycle_config.actor_count):
+                actor = await self._arb.spawn()
+                self._actors.append(actor)
 
-        await self.__spawn_actors()
-        await self.__scatter()
+            self._print('Scattering tasks...')
+            await self._scatter(cycle_config)
 
-    async def __spawn_actors(self):
-        for ai in range(self.state.actorCount):
-            acf = ActorControlFacade()
-            actor = await spawn(
-                start=acf.start,
-                periodic_task=acf.periodic_task,
-                stop=acf.stop)
+            # CYCLE - WAIT FOR TIMEOUT
+            for i in range(cycle_config.timeout):
+                self._print('%s...' % i)
+                await asyncio.sleep(1)
 
-            self.state.actor_control_facades.append(acf)
-            self.state.actors.append(actor)
+            # CYCLE - END
+            self._print('Gathering results...')
+            cycle_result = await self._gather(cycle_config)
 
-    async def __scatter(self):
-        for i in range(self.state.actorCount):
-            request = (random.randint(0, 10), random.randint(0, 10))
+            self._print('Stopping actors...')
+            for actor in self._actors:
+                actor.stop()
+
+            self._print('Stopping git server...')
+            self._git_server.dispose()
+
+            # CYCLE - LOG RESULT
+            self._log.append((cycle_config, cycle_result))
+
+            cycle_i += 1
+            cycle_config = self._next_cycle_config()
+
+    def _next_cycle_config(self):
+        return CycleConfig(500, 0.5, 10)
+
+    async def _scatter(self, cycle_config: CycleConfig):
+        for i in range(cycle_config.actor_count):
+            request = {'id': i, 'task_type': 'task_type'}
             response = await send(
-                self.state.actors[i],
+                self._actors[i],
                 'run',
-                self.state.actor_control_facades[i].task_process,
+                actor_scatter_process,
                 request)
 
-            self.__print(str(response))
+            self._print(str(response))
 
-    async def __gather(self):
-        for i in range(self.state.actorCount):
+    async def _gather(self, cycle_config: CycleConfig):
+        for i in range(cycle_config.actor_count):
             response = await send(
-                self.state.actors[i],
+                self._actors[i],
                 'run',
-                self.state.actor_control_facades[i].task_prepare_report)
+                actor_gather_process)
 
-            self.__print(str(response))
-
-    def __stop_actors(self):
-        for actor in self.state.actors:
-            actor.stop()
+            self._print(str(response))
 
     @staticmethod
-    def __print(output):
+    def _print(output):
         print('[ARBITER] ' + output)
-
-
-class ArbiterControlFacade:
-    def __init__(self):
-        self.arbiter_state = ArbiterState()
-
-    def start(self, arbiter, **kwargs):
-        ArbiterControl(arbiter, self.arbiter_state).start()
-
-    def periodic_task(self, arbiter):
-        ensure_future(ArbiterControl(arbiter, self.arbiter_state).periodic_task())
-
-    def stop(self):
-        ArbiterControl(None, self.arbiter_state).stop()
