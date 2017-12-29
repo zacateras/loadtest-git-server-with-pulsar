@@ -12,8 +12,8 @@ def git_server_build(cpus):
     :return: GitServerDocker wrapper
     """
 
-    if os.path.exists('%s/%s' % (git_vars_cwd, git_server_rel_path)):
-        shutil.rmtree('%s/%s' % (git_vars_cwd, git_server_rel_path))
+    if os.path.exists('%s' % git_server_rel_path):
+        shutil.rmtree('%s' % git_server_rel_path)
 
     _git_server_repo_build()
     _git_server_keys_store_build()
@@ -33,7 +33,7 @@ class GitServerDocker:
 
 
 def _git_server_repo_build():
-    repo_path = '%s/%s/%s' % (git_vars_cwd, git_server_rel_path, git_server_repo_name)
+    repo_path = '%s/%s' % (git_server_rel_path, git_server_repo_name)
     file_path = '%s/%s' % (repo_path, git_server_repo_file_name)
     os.makedirs(repo_path)
 
@@ -46,16 +46,13 @@ def _git_server_repo_build():
     repo.index.add([file_path])
     repo.index.commit('Initial commit.')
 
-    repo.clone('%s/%s/%s.git' % (git_vars_cwd, git_server_repos_rel_path, git_server_repo_name), bare=True)
+    repo.clone('%s/%s.git' % (git_server_repos_rel_path, git_server_repo_name), bare=True)
     shutil.rmtree(repo_path)
 
 
 def _git_server_keys_store_build():
-    id_src_path = '%s/%s' % (git_vars_cwd, git_server_public_key_file_name)
-    id_dst_path = '%s/%s' % (git_vars_cwd, git_server_keys_rel_path)
-    os.makedirs(id_dst_path)
-
-    shutil.copy(id_src_path, id_dst_path)
+    os.makedirs(git_server_keys_rel_path)
+    shutil.copy(public_key_file_path, git_server_keys_rel_path)
 
 
 def _git_server_container_build(cpus):
@@ -63,8 +60,8 @@ def _git_server_container_build(cpus):
     cpu_quota = int(cpu_period * cpus)
 
     volumes = {
-        '%s/%s' % (git_vars_cwd, git_server_keys_rel_path): {'bind': '/git-server/keys', 'mode': 'rw'},
-        '%s/%s' % (git_vars_cwd, git_server_repos_rel_path): {'bind': '/git-server/repos', 'mode': 'rw'}
+        git_server_keys_rel_path: {'bind': '/git-server/keys', 'mode': 'rw'},
+        git_server_repos_rel_path: {'bind': '/git-server/repos', 'mode': 'rw'}
     }
 
     ports = {

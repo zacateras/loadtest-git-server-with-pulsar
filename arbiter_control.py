@@ -37,6 +37,10 @@ class ArbiterControl:
         while True:
             # CYCLE - START
             self._print('Starting cycle %s...' % cycle_i)
+
+            if os.path.exists(git_rel_path):
+                shutil.rmtree(git_rel_path)
+
             self._print('Starting git server...')
             self._git_server = git_server_build(cycle_config.git_server_cpus)
 
@@ -73,11 +77,15 @@ class ArbiterControl:
             cycle_config = self._next_cycle_config()
 
     def _next_cycle_config(self):
-        return CycleConfig(500, 0.5, 10)
+        return CycleConfig(20, 0.5, 10)
 
     async def _scatter(self, cycle_config: CycleConfig):
         for i in range(cycle_config.actor_count):
-            request = {'id': i, 'task_type': 'task_type'}
+            request = {
+                'actor_id': i,
+                'actor_type': 'ONE_FILE',
+                'actor_interval': random.randint(1, 10)
+            }
             response = await send(
                 self._actors[i],
                 'run',
