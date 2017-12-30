@@ -3,5 +3,5 @@
 __pycache__/
 git/
 lib/
-pulsar.log
 venv/
+*.log

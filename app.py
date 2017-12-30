@@ -1,4 +1,4 @@
-from pulsar import arbiter
+from pulsar.api import arbiter
 from arbiter_control import *
 
 if __name__ == '__main__':

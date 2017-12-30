@@ -1,12 +1,14 @@
-from pulsar import spawn, send, arbiter
+from pulsar.api import send
 from actor_control import *
 from git_server import *
+from app_log_dumper import dump_log
 import random
 import asyncio
 
 
 class CycleConfig:
-    def __init__(self, timeout, git_server_cpus, actor_count):
+    def __init__(self, no, timeout, git_server_cpus, actor_count):
+        self.no = no
         self.timeout = timeout
         self.git_server_cpus = git_server_cpus
         self.actor_count = actor_count
@@ -32,10 +34,10 @@ class ArbiterControl:
 
     async def _work(self):
         cycle_i = 0
-        cycle_config = self._next_cycle_config()
 
         while True:
             # CYCLE - START
+            cycle_config = self._next_cycle_config(cycle_i)
             self._print('Starting cycle %s...' % cycle_i)
 
             if os.path.exists(git_rel_path):
@@ -44,14 +46,6 @@ class ArbiterControl:
             self._print('Starting git server...')
             self._git_server = git_server_build(cycle_config.git_server_cpus)
 
-            self._print('Spawning actors...')
-            self._actors = []
-
-            for ai in range(cycle_config.actor_count):
-                actor = await self._arb.spawn()
-                self._actors.append(actor)
-
-            self._print('Scattering tasks...')
             await self._scatter(cycle_config)
 
             # CYCLE - WAIT FOR TIMEOUT
@@ -60,48 +54,64 @@ class ArbiterControl:
                 await asyncio.sleep(1)
 
             # CYCLE - END
-            self._print('Gathering results...')
-            cycle_result = await self._gather(cycle_config)
-
-            self._print('Stopping actors...')
-            for actor in self._actors:
-                actor.stop()
+            cycle_result = await self._gather()
 
             self._print('Stopping git server...')
             self._git_server.dispose()
 
             # CYCLE - LOG RESULT
-            self._log.append((cycle_config, cycle_result))
+            self._log.append({'cycle_config': cycle_config, 'cycle_result': cycle_result})
+
+            dump_log(self._log)
 
             cycle_i += 1
-            cycle_config = self._next_cycle_config()
 
-    def _next_cycle_config(self):
-        return CycleConfig(20, 0.5, 10)
+    def _next_cycle_config(self, cycle_no):
+        # TODO myrywy
+        # optimization algorithm based on self._log (especially last entry - last cycle)D
+        return CycleConfig(cycle_no, 5, 0.05, 5)
 
     async def _scatter(self, cycle_config: CycleConfig):
+        self._print('Spawning actors...')
+        self._actors = []
+        for ai in range(cycle_config.actor_count):
+            act = await self._arb.spawn()
+            self._actors.append(act)
+
+        self._print('Scattering tasks...')
         for i in range(cycle_config.actor_count):
             request = {
                 'actor_id': i,
+                'actor_count': cycle_config.actor_count,
                 'actor_type': 'ONE_FILE',
                 'actor_interval': random.randint(1, 10)
             }
-            response = await send(
-                self._actors[i],
-                'run',
-                actor_scatter_process,
-                request)
 
-            self._print(str(response))
+            await send(self._actors[i], 'run', actor_scatter_process, request)
 
-    async def _gather(self, cycle_config: CycleConfig):
-        for i in range(cycle_config.actor_count):
-            response = await send(
-                self._actors[i],
-                'run',
-                actor_gather_process)
+    async def _gather(self):
+        self._print('Gathering results...')
+        cycle_result = []
+        for act in self._actors:
+            # DO NOT AWAIT
+            # run all cancel commands async
+            send(act.aid, 'run', actor_cancel_process)
 
-            self._print(str(response))
+        for act in self._actors:
+            while True:
+                report_events = await send(act, 'run', actor_gather_process)
+                if report_events is not None:
+                    break
+
+                await asyncio.sleep(0.5)
+
+            cycle_result.extend(report_events)
+
+        self._print('Stopping actors...')
+        for act in self._actors:
+            await send(act, 'stop')
+
+        return cycle_result
 
     @staticmethod
     def _print(output):
