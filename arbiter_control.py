@@ -2,6 +2,7 @@ from pulsar.api import send
 from actor_control import *
 from git_server import *
 from app_log_dumper import dump_log
+import optimization
 import random
 import asyncio
 
@@ -25,6 +26,7 @@ class ArbiterControl:
         self._actors = []
 
         self._log = []
+        self._optimization_algorithm = optimization.Annealing(self._log, ["actor_count"], [1], [1], [(1, None)])
 
     def __call__(self, arb, **kwargs):
         self._print('START')
@@ -67,9 +69,9 @@ class ArbiterControl:
             cycle_i += 1
 
     def _next_cycle_config(self, cycle_no):
-        # TODO myrywy
         # optimization algorithm based on self._log (especially last entry - last cycle)D
-        return CycleConfig(cycle_no, 5, 0.05, 5)
+        values = self._optimization_algorithm.get_optimal_parameters()
+        return CycleConfig(cycle_no, 5, 0.05, values["actor_count"])
 
     async def _scatter(self, cycle_config: CycleConfig):
         self._print('Spawning actors...')
