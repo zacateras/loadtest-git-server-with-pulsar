@@ -27,7 +27,7 @@ class Event:
 
         :param event_time: event timestamp
         :param actor_id: [0 - actor_count]
-        :param actor_type: ONE_FILE, MULTI_FILE, MULTI_BRANCH
+        :param actor_type: OWN_FILE, SHARED_FILE
         :param actor_interval: interval of commands executed by an actor
         :param command_type: CLONE / FETCH / PULL / PUSH
         :param command_exit_code: exit code of a command
@@ -100,7 +100,13 @@ class ActorControl:
             if self._cancelled():
                 return
 
-            dir_file = "file_%s.txt" % task['actor_id']
+            if task['actor_type'] == 'OWN_FILE':
+                dir_file = 'file_%s.txt' % task['actor_id']
+            elif task['actor_type'] == 'SHARED_FILE':
+                dir_file = 'file.txt'
+            else:
+                raise RuntimeError('Unknown task[actor_type].')
+
             with (open(dir_file, 'a')) as fl:
                 fl.writelines('%s, %s\n' % (time.strftime("%Y-%m-%d_%H:%M:%S", time.gmtime()), self._actor.aid))
                 fl.close()

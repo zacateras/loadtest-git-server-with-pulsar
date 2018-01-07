@@ -1,26 +1,13 @@
 import random
 import math
 import pandas as pd
+from app_log_dumper import ensure_file_not_exist
 
 
 class OptimizationLog:
-    _max_trials = 1000
-
-    def __init__(self, *args, log_name="./optimization_log"):
-        self.log_file_name = self._get_log_file_name(log_name)
+    def __init__(self, *args, log_name="./optimization.log"):
+        self.log_file_name = ensure_file_not_exist(log_name)
         self._df = pd.DataFrame(columns=args)
-
-    def _get_log_file_name(self, log_name):
-        i = 0
-        while True:
-            try:
-                file_name = log_name if i == 0 else "{}.{}".format(log_name, i)
-                with open(file_name, "x"):
-                    return file_name
-            except FileExistsError:
-                i += 1
-                if i >= self._max_trials:
-                    raise RuntimeError("Cannot create log file. Tried {} times.".format(i))
 
     def flush(self):
         self._df.to_csv(self.log_file_name)

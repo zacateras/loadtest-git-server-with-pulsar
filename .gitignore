@@ -1,7 +1,8 @@
 .Python
 .idea
+.ipynb_checkpoints
 __pycache__/
 git/
 lib/
 venv/
-*.log
+*.log*

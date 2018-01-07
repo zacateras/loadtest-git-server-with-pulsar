@@ -1,8 +1,5 @@
 import csv
 from datetime import datetime
-from collections import namedtuple
-
-_log_class_fields = namedtuple('log_class_fields', ['time', 'score', 'title', 'text', 'ofReddit', 'serious'])
 
 
 # TODO hmm maybe this can be generated automatically ?
@@ -64,7 +61,7 @@ class LogEntry:
         yield self.command_duration
         
 
-def dump_log(log):
+def dump_log(log_file, log):
     rows = []
 
     for cycle_log in log:
@@ -74,10 +71,25 @@ def dump_log(log):
         for log_entry in _create_log_entries(cycle_config, cycle_result):
             rows.append(log_entry)
 
-    with open('app.log', 'w', newline='', encoding='utf8') as f:
+    with open(log_file, 'w', newline='', encoding='utf8') as f:
         writer = csv.writer(f)
         writer.writerow(LogEntry.header())
         writer.writerows(rows)
+
+
+def ensure_file_not_exist(log_name):
+    max_trials = 1000
+    i = 0
+    while True:
+        try:
+            file_name = log_name if i == 0 else "{}.{}".format(log_name, i)
+            with open(file_name, "x"):
+                return file_name
+
+        except FileExistsError:
+            i += 1
+            if i >= max_trials:
+                raise RuntimeError("Cannot file. Tried {} times.".format(i))
 
 
 def _create_log_entries(cycle_config, cycle_result):

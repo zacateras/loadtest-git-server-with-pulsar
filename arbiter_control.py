@@ -1,18 +1,19 @@
 from pulsar.api import send
 from actor_control import *
 from git_server import *
-from app_log_dumper import dump_log
+from app_log_dumper import dump_log, ensure_file_not_exist
 import optimization
-import random
 import asyncio
 
 
 class CycleConfig:
-    def __init__(self, no, timeout, git_server_cpus, actor_count):
+    def __init__(self, no, timeout, git_server_cpus, actor_count, actor_type, actor_interval):
         self.no = no
         self.timeout = timeout
         self.git_server_cpus = git_server_cpus
         self.actor_count = actor_count
+        self.actor_type = actor_type
+        self.actor_interval = actor_interval
 
 
 class CycleResult:
@@ -26,6 +27,7 @@ class ArbiterControl:
         self._actors = []
 
         self._log = []
+        self._log_file = ensure_file_not_exist('./app.log')
         self._optimization_algorithm = optimization.Annealing(self._log, ["actor_count"], [1], [1], [(1, None)])
 
     def __call__(self, arb, **kwargs):
@@ -64,14 +66,14 @@ class ArbiterControl:
             # CYCLE - LOG RESULT
             self._log.append({'cycle_config': cycle_config, 'cycle_result': cycle_result})
 
-            dump_log(self._log)
+            dump_log(self._log_file, self._log)
 
             cycle_i += 1
 
     def _next_cycle_config(self, cycle_no):
-        # optimization algorithm based on self._log (especially last entry - last cycle)D
+        # optimization algorithm based on self._log (especially last entry - last cycle)
         values = self._optimization_algorithm.get_optimal_parameters()
-        return CycleConfig(cycle_no, 5, 0.05, values["actor_count"])
+        return CycleConfig(cycle_no, 20, 0.05, values["actor_count"], 'SHARED_FILE', 5)
 
     async def _scatter(self, cycle_config: CycleConfig):
         self._print('Spawning actors...')
@@ -85,8 +87,8 @@ class ArbiterControl:
             request = {
                 'actor_id': i,
                 'actor_count': cycle_config.actor_count,
-                'actor_type': 'ONE_FILE',
-                'actor_interval': random.randint(1, 10)
+                'actor_type': cycle_config.actor_type,
+                'actor_interval': cycle_config.actor_interval
             }
 
             await send(self._actors[i], 'run', actor_scatter_process, request)
