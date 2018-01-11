@@ -28,7 +28,12 @@ class ArbiterControl:
 
         self._log = []
         self._log_file = ensure_file_not_exist('./app.log')
-        self._optimization_algorithm = optimization.Annealing(self._log, ["actor_count"], [1], [1], [(1, None)])
+        self._optimization_algorithm = optimization.Annealing(
+            self._log,
+            ["actor_count", "actor_interval", "git_server_cpus"],
+            [1, 5, 0.05],
+            [1, 1, 0.002],
+            [(1, None), (1, None), (0.002, 0.5)])
 
     def __call__(self, arb, **kwargs):
         self._print('START')
@@ -73,7 +78,12 @@ class ArbiterControl:
     def _next_cycle_config(self, cycle_no):
         # optimization algorithm based on self._log (especially last entry - last cycle)
         values = self._optimization_algorithm.get_optimal_parameters()
-        return CycleConfig(cycle_no, 20, 0.05, values["actor_count"], 'SHARED_FILE', 5)
+        return CycleConfig(cycle_no,
+                           20,
+                           values["git_server_cpus"],
+                           values["actor_count"],
+                           'SHARED_FILE',
+                           values["actor_interval"])
 
     async def _scatter(self, cycle_config: CycleConfig):
         self._print('Spawning actors...')
