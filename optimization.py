@@ -44,6 +44,9 @@ class Annealing:
             total_duration += event.command_duration
         return total_duration
 
+    def _get_average_duration(self):
+        return self._get_total_duration()/len(self._result_logs[-1]["cycle_result"])
+
     def _goal_reached(self):
         return False
 
@@ -62,7 +65,7 @@ class Annealing:
     def _algoritm_iterator(self):
         self.current_values = self._initial_values
         yield {name: value for name, value in zip(self._variables_names, self._initial_values)}
-        current_objective_function_value = self._get_total_duration()
+        current_objective_function_value = self._get_average_duration()
 
         while not self._goal_reached():
 
@@ -75,7 +78,7 @@ class Annealing:
                     next_values[i] = upper_bound
 
             yield {name: value for name, value in zip(self._variables_names, next_values)}
-            new_objective_function_value = self._get_total_duration()
+            new_objective_function_value = self._get_average_duration()
             dE = (new_objective_function_value - current_objective_function_value) * \
                  2 / (new_objective_function_value + current_objective_function_value)
             moved = False
